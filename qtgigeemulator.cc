@@ -22,8 +22,8 @@
 #include <sys/syscall.h>
 #include <sys/types.h>
 
-#include "qtgige.moc"
-#include "qtgige.h"
+#include "qtgigeemulator.moc"
+#include "qtgigeemulator.h"
 
 #define CV_LOAD_IMAGE_GRAYSCALE_IS_DEFINED
 
@@ -227,6 +227,18 @@ void QTGIGEEmulator::convert16to8bit(cv::InputArray in, cv::OutputArray out)
   tmp_out.copyTo(out);
 }
 
+void QTGIGEEmulator::convert8to16bit(cv::InputArray in, cv::OutputArray out)
+{
+  uint8_t * in_ = (uint8_t*)in.getMat().ptr();
+  cv::Mat tmp_out(in.getMat().size().height, in.getMat().size().width, cv::DataType<uint16_t>::type);
+  uint16_t * out_ = (uint16_t*)tmp_out.ptr();
+  uint8_t * end = in_ + (in.getMat().size().height * in.getMat().size().width);
+  while(in_!=end)
+  {
+    *out_++ = (*in_++)<<8;
+  }
+  tmp_out.copyTo(out);
+}
 
 int QTGIGEEmulator::startAquisition(void )
 {
@@ -314,4 +326,27 @@ void QTGIGEEmulator::run()
    emit(this->newBayerGRImage(RGB161616, roi_cpos));
    this->msleep(300);
   }
+}
+
+void QTGIGEEmulator::loadCorrectionImage(const QString pathToLog)
+{
+  cv::Mat tempImage;
+  #ifdef CV_LOAD_IMAGE_GRAYSCALE_IS_DEFINED
+  tempImage = cv::imread(pathToLog.toStdString(), CV_LOAD_IMAGE_GRAYSCALE);
+  #else
+  tempImage = cv::imread(pathToLog.toStdString(), cv::IMREAD_GRAYSCALE);
+  #endif
+  convert8to16bit(tempImage, correctionImage);
+}
+
+void QTGIGEEmulator::correctVignetting(cv::Mat img, qint64 timestampus)
+{
+//  std::cout << "img.cols: " << img.cols << " correctionImage.cols: " << correctionImage.cols << std::endl;
+//  std::cout << "img.rows: " << img.rows << " correctionImage.rows: " << correctionImage.rows << std::endl;
+  assert(img.cols == correctionImage.cols);
+  assert(img.rows == correctionImage.rows);
+  
+  cv::Mat resultImage = img.mul(correctionImage, 1 / 64000.);
+  emit(vignettingCorrectedInImage(resultImage, timestampus));
+//  std::cout << "Emitted vignetting correcting image" << std::endl;
 }
