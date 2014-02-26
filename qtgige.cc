@@ -298,14 +298,14 @@ void QTGIGEEmulator::run()
   {
     for(uint16_t x = 1; x < w; x+=2)
     {
-      ptr[y*w+x] = 0;
+//       ptr[y*w+x] = 0;
     }
   }
   for(uint16_t y = 1; y < h; y+=2)
   {
     for(uint16_t x = 0; x < w; x+=2)
     {
-      ptr[y*w+x] = 0;
+//       ptr[y*w+x] = 0;
     }
   }
   //  std::cout << "RGB161616 image size " << RGB161616.size().width << "x" << RGB161616.size().height << "x" << RGB161616.channels() << std::endl;
