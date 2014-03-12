@@ -3,6 +3,7 @@
 #ifndef QTGIGEEmulator_H
 #define QTGIGEEmulator_H
 #define EMULATION_INPUT_FILE "../simulation_image/maizeAnd3weedsCombinedImage.png"
+#define EMULATION_INPUT_DIRECTORY "../simulation_image_dir/2013-08-27 15.59.31.881/CameraTwo/"
 #include <QObject>
 #include <QMutex>
 #include <QQueue>

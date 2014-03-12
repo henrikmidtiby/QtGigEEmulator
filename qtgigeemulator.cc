@@ -7,6 +7,7 @@
 #include <semaphore.h>
 #include <QElapsedTimer>
 #include <QDialog>
+#include <QDir>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 #include <QGridLayout>
@@ -47,7 +48,7 @@ QTGIGEEmulator::QTGIGEEmulator(const char* deviceId)
 
 void QTGIGEEmulator::setptimer(itimerval timer)
 {
-	setitimer(ITIMER_PROF, &timer, NULL	);
+	setitimer(ITIMER_PROF, &timer, NULL );
 	ptimer = timer;
 	updateptimer = true;
 }
@@ -259,16 +260,36 @@ void QTGIGEEmulator::run()
 	successFrames = 0;
 	failedFrames = 0;
 	
-	cv::Mat emu_image;
-	std::cout << "Using " << EMULATION_INPUT_FILE << " as input file for emulation" << std::endl;
-	#ifdef CV_LOAD_IMAGE_GRAYSCALE_IS_DEFINED
-	emu_image = cv::imread(EMULATION_INPUT_FILE, CV_LOAD_IMAGE_GRAYSCALE);
-	#else
-	emu_image = cv::imread(EMULATION_INPUT_FILE, cv::IMREAD_GRAYSCALE);
-	#endif
-	cv::transpose(emu_image, emu_image);
-	std::cout << "Emulation image size " << emu_image.size().width << "x" << emu_image.size().height << "x" << emu_image.channels() << std::endl;
-	unsigned int length = emu_image.size().height;
+	// Get list of files that can be used for simulated input images.
+	QStringList nameFilter("*.png");
+	QDir directory(EMULATION_INPUT_DIRECTORY);
+	QStringList pngFilesAndDirectories = directory.entryList(nameFilter);
+	std::cout << "Found " << pngFilesAndDirectories.size() << " image files for emulation." << std::endl;
+	
+	// Load images to memory
+	std::list<cv::Mat> emulationImages;
+	QStringList::const_iterator constIterator;
+	for (constIterator = pngFilesAndDirectories.constBegin(); constIterator != pngFilesAndDirectories.constEnd(); ++constIterator)
+	{
+		QString filename = directory.filePath(*constIterator);   
+		std::cout << filename.toLocal8Bit().constData() << std::endl;
+		
+		cv::Mat emu_image;
+		
+		#ifdef CV_LOAD_IMAGE_GRAYSCALE_IS_DEFINED
+		emu_image = cv::imread(filename.toStdString(), CV_LOAD_IMAGE_GRAYSCALE);
+		#else
+		emu_image = cv::imread(filename.toStdString(), cv::IMREAD_GRAYSCALE);
+		#endif
+		//          cv::transpose(emu_image, emu_image);
+		
+		emulationImages.push_back(emu_image);
+		
+		//          if(emulationImages.size() > 10)
+		//              break;
+	}
+	
+	std::list<cv::Mat>::iterator emulationImageIter = emulationImages.begin();
 	
 	framePeriod.start();
 	while(abort==false)
@@ -294,37 +315,18 @@ void QTGIGEEmulator::run()
 		}
 		
 		//Send out next emulated frame
-		roi_cpos -= roi_height/10;
-		if(roi_cpos-roi_height<0)
-			roi_cpos = length;
-		cv::Mat subImg = emu_image(cv::Range(roi_cpos-roi_height, roi_cpos), cv::Range(roi_x, roi_x+roi_width));
-		//   cv::Mat subImg16;
-		//   convert8to16bit(subImg, subImg16);
-		cv::Mat RGB161616(roi_height,roi_width, cv::DataType<uint16_t>::type);
-		subImg.convertTo(RGB161616, RGB161616.type(), 256.0);
-		//Set red and blue in bayer pattern = 0
-		uint16_t h = RGB161616.size().height;
-		uint16_t w = RGB161616.size().width;
-		uint16_t* ptr = (uint16_t*)RGB161616.ptr();
-		for(uint16_t y = 0; y < h; y+=2)
-		{
-			for(uint16_t x = 1; x < w; x+=2)
-			{
-				//       ptr[y*w+x] = 0;
-			}
-		}
-		for(uint16_t y = 1; y < h; y+=2)
-		{
-			for(uint16_t x = 0; x < w; x+=2)
-			{
-				//       ptr[y*w+x] = 0;
-			}
-		}
-		//  std::cout << "RGB161616 image size " << RGB161616.size().width << "x" << RGB161616.size().height << "x" << RGB161616.channels() << std::endl;
-		//cv::imwrite("test.png", RGB161616);
-		//emit(this->newBayerGRImage(RGB161616, QDateTime::currentMSecsSinceEpoch()*1000));
+		cv::Mat RGB161616(emulationImageIter->rows, emulationImageIter->cols, cv::DataType<uint16_t>::type);
+		(*emulationImageIter).convertTo(RGB161616, RGB161616.type(), 256.0);
+		
 		emit(this->newBayerGRImage(RGB161616, roi_cpos));
 		this->msleep(300);
+		
+		// Cycle through emulation images.
+		emulationImageIter++;
+		if(emulationImageIter == emulationImages.end())
+		{
+			emulationImageIter = emulationImages.begin();
+		}
 	}
 }
 
